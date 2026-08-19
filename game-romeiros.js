@@ -3,6 +3,8 @@
  * Usa o Engine genérico definido em engine.js.
  */
 
+const LETHAL_FALL_HEIGHT = 110; // acima disso, queda sem guarda-chuva mata
+
 class Entity {
   constructor(x, y) {
     this.x = x;
@@ -77,7 +79,7 @@ class Entity {
       );
 
       if (landed) {
-        if (!this.hasUmbrella && this.fallHeight > 110) {
+        if (!this.hasUmbrella && this.fallHeight > LETHAL_FALL_HEIGHT) {
           this.state = 'DEAD';
         } else {
           this.y = landed.y - this.radius;
@@ -163,11 +165,15 @@ const mcTonnyLevel1 = {
   spawnRate: 2000,
   spawn: { x: 40, y: 100 - RADIUS }, // FIX: alinhado exatamente com a superfície da Pista 1 (y:100), sem gap
   target: { x: 310, y: 380 },
-  abilities: { BLOCKER: 3, BUILDER: 2, FLOAT: 10 },
+  // BALANCE: guarda-chuva é o único jeito de sobreviver a uma queda >110px,
+  // e é permanente (protege o romeiro pro resto da fase). Por isso o estoque
+  // de FLOAT precisa ser >= minRequired sempre que houver ao menos 1 queda letal
+  // obrigatória no caminho.
+  abilities: { BLOCKER: 4, BUILDER: 3, FLOAT: 12 },
   platforms: [
     { x: 10, y: 100, w: 200, h: 10 }, // Pista 1 Superior
-    { x: 90, y: 240, w: 260, h: 10 }, // Pista 2 Intermediária
-    { x: 10, y: 380, w: 340, h: 10 }  // Pista 3 Inferior
+    { x: 90, y: 190, w: 260, h: 10 }, // Pista 2 Intermediária — queda de 90px (segura, sem guarda-chuva)
+    { x: 10, y: 380, w: 340, h: 10 }  // Pista 3 Inferior — queda de 190px (LETAL, exige guarda-chuva)
   ]
 };
 
