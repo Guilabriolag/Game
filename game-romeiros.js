@@ -163,7 +163,7 @@ const mcTonnyLevel1 = {
   spawnRate: 2000,
   spawn: { x: 40, y: 100 - RADIUS }, // FIX: alinhado exatamente com a superfície da Pista 1 (y:100), sem gap
   target: { x: 310, y: 380 },
-  abilities: { BLOCKER: 3, BUILDER: 2, FLOAT: 13 },
+  abilities: { BLOCKER: 3, BUILDER: 2, FLOAT: 10 },
   platforms: [
     { x: 10, y: 100, w: 200, h: 10 }, // Pista 1 Superior
     { x: 90, y: 240, w: 260, h: 10 }, // Pista 2 Intermediária
