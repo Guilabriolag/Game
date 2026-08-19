@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>McTonny - Rota dos Romeiros v0.3</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div id="game-container">
+
+  <div class="top-hud">
+    <div class="title">ROTA DOS ROMEIROS</div>
+    <div class="counters">
+      <span>👣 <span id="c-total">15</span></span>
+      <span style="color: #4CAF50;">✅ <span id="c-saved">0</span></span>
+      <span style="color: #F44336;">❌ <span id="c-lost">0</span></span>
+    </div>
+    <div class="target">Meta: <b id="c-target" style="color: #fff;">10</b> chegarem ao restaurante</div>
+  </div>
+
+  <div class="canvas-wrapper">
+    <div id="action-toast">👆 TOQUE EM UM ROMEIRO</div>
+    <canvas id="gameCanvas"></canvas>
+  </div>
+
+  <div class="bottom-hud">
+    <div class="abilities-grid">
+      <button class="btn-ability active" id="btn-BLOCKER" onclick="selectAbility('BLOCKER')">
+        <span class="icon">🛑</span>
+        <span>Bloquear</span>
+        <span class="count" id="count-BLOCKER">x3</span>
+      </button>
+      <button class="btn-ability" id="btn-BUILDER" onclick="selectAbility('BUILDER')">
+        <span class="icon">🪜</span>
+        <span>Rampa</span>
+        <span class="count" id="count-BUILDER">x2</span>
+      </button>
+      <button class="btn-ability" id="btn-FLOAT" onclick="selectAbility('FLOAT')">
+        <span class="icon">☂️</span>
+        <span>Chuva</span>
+        <span class="count" id="count-FLOAT">x3</span>
+      </button>
+    </div>
+  </div>
+
+  <div id="end-modal">
+    <h2 id="modal-title">FASE CONCLUÍDA!</h2>
+    <p id="modal-summary"></p>
+    <button onclick="restartLevel()">Tentar Novamente</button>
+  </div>
+
+</div>
+
+<!-- Ordem importa: engine primeiro, depois o jogo específico -->
+<script src="js/engine.js"></script>
+<script src="js/game-romeiros.js"></script>
+</body>
+</html>
