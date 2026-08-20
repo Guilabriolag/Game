@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZYRO - Isometric Camera & Character Test</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0b0c10;
+            color: #fff;
+        }
+
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        #top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 40px;
+            background: rgba(15, 15, 26, 0.85);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 15px;
+            z-index: 10;
+            border-bottom: 2px solid #1f2833;
+            font-size: 12px;
+            color: #66fcf1;
+        }
+
+        #controls-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 10;
+            touch-action: none;
+        }
+
+        #joystick-zone {
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(102, 252, 241, 0.3);
+            border-radius: 50%;
+            position: relative;
+        }
+
+        #joystick-stick {
+            width: 40px;
+            height: 40px;
+            background: #66fcf1;
+            border-radius: 50%;
+            position: absolute;
+            top: 28px;
+            left: 28px;
+            box-shadow: 0 0 10px rgba(102, 252, 241, 0.6);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="top-bar">
+        <div>⚡ AJUSTE DE CÂMERA & PERSONAGEM ZOMBOID</div>
+        <div>📍 POS: <span id="coordsDisplay">0, 0</span></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="controls-container">
+        <div id="joystick-zone">
+            <div id="joystick-stick"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        const GRID_SIZE = 12;
+        // Proporção 2:1 clássica para projeção isométrica 3/4
+        const TILE_WIDTH = 80;
+        const TILE_HEIGHT = 40;
+
+        const player = {
+            worldX: 0,
+            worldY: 0,
+            speed: 0.06,
+            direction: 0, // 0: S, 1: SW, 2: W, 3: NW, 4: N, 5: NE, 6: E, 7: SE
+            isMoving: false,
+            animFrame: 0
+        };
+
+        function worldToScreen(wx, wy) {
+            const relX = wx - player.worldX;
+            const relY = wy - player.worldY;
+
+            const screenX = (canvas.width / 2) + (relX - relY) * (TILE_WIDTH / 2);
+            const screenY = (canvas.height / 2) + (relX + relY) * (TILE_HEIGHT / 2);
+            return { x: screenX, y: screenY };
+        }
+
+        // Gera o SVG do Personagem em Visão Isométrica 3/4 (Estilo Zomboid)
+        function createZomboidCharacterSVG(direction, isMoving, animFrame) {
+            const legSwing = isMoving ? Math.sin(animFrame * 0.25) * 8 : 0;
+            const armSwing = isMoving ? Math.cos(animFrame * 0.25) * 6 : 0;
+            const bobbing = isMoving ? Math.abs(Math.sin(animFrame * 0.25)) * 3 : 0;
+
+            const svgString = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="96" viewBox="0 0 64 96">
+                <!-- Sombra Isométrica Base -->
+                <ellipse cx="32" cy="88" rx="16" ry="7" fill="rgba(0,0,0,0.35)" />
+                
+                <g transform="translate(0, ${-bobbing})">
+                    <!-- Pernas (Jeans) -->
+                    <rect x="${24 - legSwing}" y="60" width="7" height="26" rx="3" fill="#1b2a38" />
+                    <rect x="${33 + legSwing}" y="60" width="7" height="26" rx="3" fill="#233548" />
+
+                    <!-- Calçados/Botas -->
+                    <ellipse cx="${27.5 - legSwing}" cy="85" rx="4" ry="2" fill="#0d0d0d" />
+                    <ellipse cx="${36.5 + legSwing}" cy="85" rx="4" ry="2" fill="#0d0d0d" />
+
+                    <!-- Torso / Jaqueta (Camadas e Postura) -->
+                    <path d="M 18 36 L 46 36 L 44 62 L 20 62 Z" fill="#2b3a4a" stroke="#1b2530" stroke-width="2" />
+                    <!-- Gola / Camisa por baixo -->
+                    <polygon points="28,36 32,42 36,36" fill="#d9d9d9" />
+
+                    <!-- Braço Esquerdo -->
+                    <rect x="${13 + armSwing}" y="38" width="6" height="20" rx="3" fill="#233548" />
+                    <circle cx="${16 + armSwing}" cy="60" r="3.5" fill="#e0ac69" />
+
+                    <!-- Braço Direito -->
+                    <rect x="${45 - armSwing}" y="38" width="6" height="20" rx="3" fill="#2b3a4a" />
+                    <circle cx="${48 - armSwing}" cy="60" r="3.5" fill="#e0ac69" />
+
+                    <!-- Cabeça / Pescoço -->
+                    <rect x="29" y="30" width="6" height="7" fill="#c99352" />
+                    <circle cx="32" cy="24" r="10" fill="#e0ac69" />
+                    
+                    <!-- Cabelo (Estilo Sobrevivente 90s) -->
+                    <path d="M 21 22 C 21 12, 43 12, 43 22 C 43 16, 21 16, 21 22 Z" fill="#3a2212" />
+                    
+                    <!-- Mochila (Equipamento Visível nas Costas) -->
+                    ${(direction >= 3 && direction <= 5) ? '<rect x="20" y="38" width="24" height="20" rx="4" fill="#4a5d3e" stroke="#2d3a24" stroke-width="2"/>' : ''}
+                </g>
+            </svg>`;
+
+            const img = new Image();
+            img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svgString);
+            return img;
+        }
+
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const halfGrid = GRID_SIZE / 2;
+            for (let x = -halfGrid; x < halfGrid; x++) {
+                for (let y = -halfGrid; y < halfGrid; y++) {
+                    const pos = worldToScreen(x, y);
+
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                    ctx.lineTo(pos.x + TILE_WIDTH / 2, pos.y + TILE_HEIGHT / 2);
+                    ctx.lineTo(pos.x, pos.y + TILE_HEIGHT);
+                    ctx.lineTo(pos.x - TILE_WIDTH / 2, pos.y + TILE_HEIGHT / 2);
+                    ctx.closePath();
+
+                    ctx.fillStyle = (x + y) % 2 === 0 ? "#151922" : "#1f2430";
+                    ctx.fill();
+                    ctx.strokeStyle = "rgba(102, 252, 241, 0.08)";
+                    ctx.stroke();
+                }
+            }
+
+            if (player.isMoving) {
+                player.animFrame += 1;
+            }
+
+            const charImg = createZomboidCharacterSVG(player.direction, player.isMoving, player.animFrame);
+
+            const screenCenter = { x: canvas.width / 2, y: canvas.height / 2 };
+            if (charImg.complete) {
+                // Posicionamento ajustado considerando a nova altura do modelo (96px)
+                ctx.drawImage(charImg, screenCenter.x - 32, screenCenter.y - 78, 64, 96);
+            }
+
+            document.getElementById('coordsDisplay').innerText = `${player.worldX.toFixed(1)}, ${player.worldY.toFixed(1)}`;
+
+            requestAnimationFrame(render);
+        }
+
+        const joyZone = document.getElementById('joystick-zone');
+        const joyStick = document.getElementById('joystick-stick');
+        let isDragging = false;
+        let joyVector = { x: 0, y: 0 };
+
+        function handleMove(clientX, clientY) {
+            const rect = joyZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            let deltaX = clientX - centerX;
+            let deltaY = clientY - centerY;
+            const distance = Math.min(Math.hypot(deltaX, deltaY), 30);
+            const angle = Math.atan2(deltaY, deltaX);
+
+            const moveX = Math.cos(angle) * distance;
+            const moveY = Math.sin(angle) * distance;
+
+            joyStick.style.transform = `translate(${moveX}px, ${moveY}px)`;
+
+            if (distance > 2) {
+                joyVector.x = moveX / 30;
+                joyVector.y = moveY / 30;
+                player.isMoving = true;
+
+                // Mapeia o ângulo em 8 direções discretas
+                let octant = Math.round((angle + Math.PI) / (Math.PI / 4)) % 8;
+                player.direction = octant;
+            } else {
+                joyVector = { x: 0, y: 0 };
+                player.isMoving = false;
+            }
+        }
+
+        joyZone.addEventListener('pointerdown', (e) => {
+            isDragging = true;
+            handleMove(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (isDragging) handleMove(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('pointerup', () => {
+            if (isDragging) {
+                isDragging = false;
+                joyStick.style.transform = `translate(0px, 0px)`;
+                joyVector = { x: 0, y: 0 };
+                player.isMoving = false;
+            }
+        });
+
+        setInterval(() => {
+            if (player.isMoving) {
+                player.worldX += (joyVector.x + joyVector.y) * player.speed;
+                player.worldY += (joyVector.y - joyVector.x) * player.speed;
+            }
+        }, 1000 / 60);
+
+        render();
+    </script>
+</body>
+</html>
