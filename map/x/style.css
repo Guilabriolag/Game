@@ -36,22 +36,22 @@ body, html {
     padding: 0 20px;
     z-index: 10;
     border-bottom: 2px solid #1f2833;
-    font-size: 16px;
+    font-size: 15px;
     font-weight: bold;
     color: #66fcf1;
 }
 
-/* Joystick (Esquerda) - Gigante e Ergonômico */
+/* Joystick Ergonomia */
 #controls-container {
     position: absolute;
-    bottom: 40px;
-    left: 30px;
+    bottom: 30px;
+    left: 20px;
     z-index: 10;
 }
 
 #joystick-zone {
-    width: 180px;
-    height: 180px;
+    width: 150px;
+    height: 150px;
     background: rgba(255, 255, 255, 0.08);
     border: 3px solid rgba(102, 252, 241, 0.4);
     border-radius: 50%;
@@ -60,34 +60,34 @@ body, html {
 }
 
 #joystick-stick {
-    width: 70px;
-    height: 70px;
+    width: 60px;
+    height: 60px;
     background: #66fcf1;
     border-radius: 50%;
     position: absolute;
-    top: 55px;
-    left: 55px;
-    box-shadow: 0 0 20px rgba(102, 252, 241, 0.8);
+    top: 45px;
+    left: 45px;
+    box-shadow: 0 0 15px rgba(102, 252, 241, 0.8);
     pointer-events: none;
 }
 
-/* Botões de Ação (Direita) */
+/* Botões de Ação */
 #action-container {
     position: absolute;
-    bottom: 40px;
-    right: 30px;
+    bottom: 30px;
+    right: 20px;
     z-index: 10;
     display: flex;
-    gap: 20px;
+    gap: 15px;
     align-items: flex-end;
 }
 
 .btn-action {
-    width: 75px;
-    height: 75px;
+    width: 65px;
+    height: 65px;
     border-radius: 50%;
     border: none;
-    font-size: 22px;
+    font-size: 20px;
     font-weight: bold;
     color: #0b0c10;
     background: #66fcf1;
@@ -104,7 +104,7 @@ body, html {
 }
 
 .btn-b {
-    margin-bottom: 30px; /* Efeito escalonado clássico de controle */
+    margin-bottom: 20px;
     background: #ffcc00;
     box-shadow: 0 0 15px rgba(255, 204, 0, 0.5);
 }
