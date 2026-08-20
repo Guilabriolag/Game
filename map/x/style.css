@@ -17,57 +17,94 @@ body, html {
 }
 
 #gameCanvas {
-    width: 100%;
-    height: 100%;
+    width: 100vw;
+    height: 100vh;
     display: block;
 }
 
-/* HUD Superior Encorpada */
+/* HUD Superior */
 #top-bar {
     position: absolute;
     top: 0;
     left: 0;
     width: 100%;
-    height: 55px;
-    background: rgba(15, 15, 26, 0.92);
+    height: 60px;
+    background: rgba(15, 15, 26, 0.95);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0 25px;
+    padding: 0 20px;
     z-index: 10;
     border-bottom: 2px solid #1f2833;
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: bold;
     color: #66fcf1;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
 }
 
-/* Ergonomia do Controle */
+/* Joystick (Esquerda) - Gigante e Ergonômico */
 #controls-container {
     position: absolute;
-    bottom: 30px;
+    bottom: 40px;
     left: 30px;
     z-index: 10;
 }
 
 #joystick-zone {
-    width: 140px;
-    height: 140px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 3px solid rgba(102, 252, 241, 0.35);
+    width: 180px;
+    height: 180px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 3px solid rgba(102, 252, 241, 0.4);
     border-radius: 50%;
     position: relative;
     backdrop-filter: blur(4px);
 }
 
 #joystick-stick {
-    width: 55px;
-    height: 55px;
+    width: 70px;
+    height: 70px;
     background: #66fcf1;
     border-radius: 50%;
     position: absolute;
-    top: 42.5px;
-    left: 42.5px;
-    box-shadow: 0 0 15px rgba(102, 252, 241, 0.7);
+    top: 55px;
+    left: 55px;
+    box-shadow: 0 0 20px rgba(102, 252, 241, 0.8);
     pointer-events: none;
+}
+
+/* Botões de Ação (Direita) */
+#action-container {
+    position: absolute;
+    bottom: 40px;
+    right: 30px;
+    z-index: 10;
+    display: flex;
+    gap: 20px;
+    align-items: flex-end;
+}
+
+.btn-action {
+    width: 75px;
+    height: 75px;
+    border-radius: 50%;
+    border: none;
+    font-size: 22px;
+    font-weight: bold;
+    color: #0b0c10;
+    background: #66fcf1;
+    box-shadow: 0 0 15px rgba(102, 252, 241, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+}
+
+.btn-action:active {
+    transform: scale(0.92);
+    background: #45a29e;
+}
+
+.btn-b {
+    margin-bottom: 30px; /* Efeito escalonado clássico de controle */
+    background: #ffcc00;
+    box-shadow: 0 0 15px rgba(255, 204, 0, 0.5);
 }
