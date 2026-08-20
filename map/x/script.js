@@ -1,19 +1,18 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// --- Configurações de Escala e Renderização ---
-const SCALE = 2.2;             // Escala do personagem no Canvas
-const TOTAL_FRAMES = 12;       // Resolução de passada
-const NUM_DIRECTIONS = 16;     // Suavidade do giro (16 direções)
+// --- Configurações Gerais ---
+const SCALE = 3.8;             // Aumentado drasticamente para o boneco ficar grande
+const TOTAL_FRAMES = 12;
+const NUM_DIRECTIONS = 16;
 
 const player = {
     worldX: 0,
     worldY: 0,
     speed: 0.05,
-    dirIndex: 0,              // 0 a 15
+    dirIndex: 0,
     isMoving: false,
-    animFrame: 0,
-    angle: 0
+    animFrame: 0
 };
 
 const spriteCache = {};
@@ -27,7 +26,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// --- Motor de Geração de Sprites Em Memória ---
+// --- SVG Sprites ---
 function getSVGString(viewType, step) {
     const progress = (step / TOTAL_FRAMES) * Math.PI * 2;
     const legShift = Math.sin(progress) * 8;
@@ -93,7 +92,7 @@ function getSVGString(viewType, step) {
                 <circle cx="32" cy="18" r="10" fill="#3a2212" />
             </g>
         `;
-    } else { // front
+    } else {
         body = `
             <g transform="rotate(${bodyTilt}, 32, 50)">
                 <rect x="23" y="${58 + legShift}" width="8" height="26" rx="3" fill="#1b2a38" />
@@ -140,41 +139,37 @@ function worldToScreen(wx, wy) {
     return { x: screenX, y: screenY };
 }
 
-// --- Mapeamento das 16 Direções com Interpolação ---
 function getSpriteFor16Directions(dirIndex) {
-    // Mapeia o índice de 0 a 15 para os 5 visuais base com espelhamento e micro-rotação
     let viewType = 'front';
     let flipX = 1;
-    let rotationAngle = 0; // Ajuste dinâmico em graus para intermediários
+    let rotationAngle = 0;
 
-    // Ângulo por setor: 360 / 16 = 22.5 graus
     switch (dirIndex) {
-        case 0:  viewType = 'front'; break;                                  // Sul
-        case 1:  viewType = 'diag_front'; rotationAngle = -11.25; break;      // Sul-Sudeste
-        case 2:  viewType = 'diag_front'; break;                             // Sudeste
-        case 3:  viewType = 'profile'; rotationAngle = -11.25; break;         // Leste-Sudeste
-        case 4:  viewType = 'profile'; break;                                // Leste
-        case 5:  viewType = 'diag_back'; rotationAngle = 11.25; break;        // Leste-Nordeste
-        case 6:  viewType = 'diag_back'; break;                              // Nordeste
-        case 7:  viewType = 'back'; rotationAngle = -11.25; break;           // Norte-Nordeste
-        case 8:  viewType = 'back'; break;                                   // Norte
-        case 9:  viewType = 'back'; rotationAngle = 11.25; break;            // Norte-Noroeste
-        case 10: viewType = 'diag_back'; flipX = -1; break;                  // Noroeste
-        case 11: viewType = 'profile'; flipX = -1; rotationAngle = -11.25; break; // Oeste-Noroeste
-        case 12: viewType = 'profile'; flipX = -1; break;                    // Oeste
-        case 13: viewType = 'diag_front'; flipX = -1; rotationAngle = 11.25; break; // Oeste-Sudoeste
-        case 14: viewType = 'diag_front'; flipX = -1; break;                 // Sudoeste
-        case 15: viewType = 'front'; rotationAngle = 11.25; break;           // Sul-Sudoeste
+        case 0:  viewType = 'front'; break;
+        case 1:  viewType = 'diag_front'; rotationAngle = -11.25; break;
+        case 2:  viewType = 'diag_front'; break;
+        case 3:  viewType = 'profile'; rotationAngle = -11.25; break;
+        case 4:  viewType = 'profile'; break;
+        case 5:  viewType = 'diag_back'; rotationAngle = 11.25; break;
+        case 6:  viewType = 'diag_back'; break;
+        case 7:  viewType = 'back'; rotationAngle = -11.25; break;
+        case 8:  viewType = 'back'; break;
+        case 9:  viewType = 'back'; rotationAngle = 11.25; break;
+        case 10: viewType = 'diag_back'; flipX = -1; break;
+        case 11: viewType = 'profile'; flipX = -1; rotationAngle = -11.25; break;
+        case 12: viewType = 'profile'; flipX = -1; break;
+        case 13: viewType = 'diag_front'; flipX = -1; rotationAngle = 11.25; break;
+        case 14: viewType = 'diag_front'; flipX = -1; break;
+        case 15: viewType = 'front'; rotationAngle = 11.25; break;
     }
 
     return { viewType, flipX, rotationAngle };
 }
 
-// --- Render Loop ---
 function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Grid Isométrico
+    // Chão Isométrico
     const halfGrid = 7;
     for (let x = -halfGrid; x < halfGrid; x++) {
         for (let y = -halfGrid; y < halfGrid; y++) {
@@ -194,7 +189,6 @@ function render() {
         }
     }
 
-    // Atualização da Passada
     if (player.isMoving) {
         player.animFrame = (player.animFrame + 0.25) % TOTAL_FRAMES;
     } else {
@@ -212,18 +206,11 @@ function render() {
     ctx.save();
     ctx.translate(screenCenter.x, screenCenter.y);
     
-    // Inversão Horizontal para direções para Oeste
-    if (spriteData.flipX === -1) {
-        ctx.scale(-1, 1);
-    }
-
-    // Micro-rotação procedural para os ângulos intermediários
-    if (spriteData.rotationAngle !== 0) {
-        ctx.rotate((spriteData.rotationAngle * Math.PI) / 180);
-    }
+    if (spriteData.flipX === -1) ctx.scale(-1, 1);
+    if (spriteData.rotationAngle !== 0) ctx.rotate((spriteData.rotationAngle * Math.PI) / 180);
 
     if (imgToDraw && imgToDraw.complete) {
-        ctx.drawImage(imgToDraw, -(drawWidth / 2), -drawHeight + (10 * SCALE), drawWidth, drawHeight);
+        ctx.drawImage(imgToDraw, -(drawWidth / 2), -drawHeight + (15 * SCALE), drawWidth, drawHeight);
     }
     ctx.restore();
 
@@ -232,7 +219,7 @@ function render() {
     requestAnimationFrame(render);
 }
 
-// --- Controles e Matemática de Entrada do Joystick ---
+// --- Joystick ---
 const joyZone = document.getElementById('joystick-zone');
 const joyStick = document.getElementById('joystick-stick');
 let isDragging = false;
@@ -245,7 +232,7 @@ function handleMove(clientX, clientY) {
 
     let deltaX = clientX - centerX;
     let deltaY = clientY - centerY;
-    const maxRadius = 45; // Raio estendido proporcional ao novo layout
+    const maxRadius = 55; // Ajustado para o novo tamanho de 180px
     const distance = Math.min(Math.hypot(deltaX, deltaY), maxRadius);
     const angle = Math.atan2(deltaY, deltaX);
 
@@ -259,11 +246,8 @@ function handleMove(clientX, clientY) {
         joyVector.y = moveY / maxRadius;
         player.isMoving = true;
 
-        // Mapeamento em 16 Setores (22.5° por fração)
         let angleStep = (Math.PI * 2) / NUM_DIRECTIONS;
         let octant = Math.round((angle + Math.PI) / angleStep) % NUM_DIRECTIONS;
-        
-        // Mapeamento dos ângulos do radiano para os índices do Engine
         const dirMap = [12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 15, 14, 13];
         player.dirIndex = dirMap[octant];
     } else {
@@ -272,15 +256,8 @@ function handleMove(clientX, clientY) {
     }
 }
 
-joyZone.addEventListener('pointerdown', (e) => {
-    isDragging = true;
-    handleMove(e.clientX, e.clientY);
-});
-
-window.addEventListener('pointermove', (e) => {
-    if (isDragging) handleMove(e.clientX, e.clientY);
-});
-
+joyZone.addEventListener('pointerdown', (e) => { isDragging = true; handleMove(e.clientX, e.clientY); });
+window.addEventListener('pointermove', (e) => { if (isDragging) handleMove(e.clientX, e.clientY); });
 window.addEventListener('pointerup', () => {
     if (isDragging) {
         isDragging = false;
@@ -290,10 +267,19 @@ window.addEventListener('pointerup', () => {
     }
 });
 
-// Loop de Física Sincronizado
+// --- Eventos dos Botões de Ação ---
+document.getElementById('btnA').addEventListener('pointerdown', () => {
+    console.log("Ação A executada");
+    // Futuro: Correr / Ação
+});
+
+document.getElementById('btnB').addEventListener('pointerdown', () => {
+    console.log("Ação B executada");
+    // Futuro: Atacar / Interagir
+});
+
 setInterval(() => {
     if (player.isMoving) {
-        // Conversão de Vetor de Tela para Eixos Isométricos
         const isoX = joyVector.x * Math.cos(Math.PI / 4) + joyVector.y * Math.sin(Math.PI / 4);
         const isoY = joyVector.y * Math.cos(Math.PI / 4) - joyVector.x * Math.sin(Math.PI / 4);
 
@@ -302,5 +288,4 @@ setInterval(() => {
     }
 }, 1000 / 60);
 
-// Inicia Render
 render();
