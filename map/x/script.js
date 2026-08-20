@@ -2,7 +2,7 @@ const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
 // --- Configurações Gerais e Zoom ---
-let ZOOM = 1.8;                // Escala equilibrada por padrão
+let ZOOM = 1.8;
 const MIN_ZOOM = 1.0;
 const MAX_ZOOM = 3.5;
 const TOTAL_FRAMES = 12;
@@ -11,19 +11,23 @@ const NUM_DIRECTIONS = 16;
 const player = {
     worldX: 0,
     worldY: 0,
-    radius: 0.3,              // Raio de colisão do jogador em unidades do mundo
+    radius: 0.4,               // Raio de colisão em unidades do mundo
     speed: 0.05,
     dirIndex: 0,
     isMoving: false,
     animFrame: 0
 };
 
-// --- PONTOS DE INTERESSE / OBJETOS COM COLISÃO ---
-const worldObjects = [
-    { id: 'balcao', x: 2, y: 2, w: 2, h: 1, color: '#8b5a2b', label: 'Balcão' },
-    { id: 'porta', x: -3, y: 4, w: 1, h: 0.2, color: '#4a3525', label: 'Porta' },
-    { id: 'janela', x: 4, y: -3, w: 0.2, h: 1.5, color: '#66fcf1', label: 'Janela' }
-];
+// --- ESTRUTURA DO TRAILER DE LANCHE ---
+const foodTrailer = {
+    x: -1.5,
+    y: -1.5,
+    w: 3.0,                   // Largura na grelha
+    h: 2.0,                   // Profundidade na grelha
+    interactX: 0.0,           // Ponto focal para o balcão
+    interactY: 1.0,
+    label: "Trailer de Lanche"
+};
 
 const spriteCache = {};
 const TILE_WIDTH = 120;
@@ -36,7 +40,7 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// --- SUPORTE A ZOOM (MOUSE SCROLL E PINÇA MOBILE) ---
+// --- SISTEMA DE ZOOM (SCROLL E PINÇA MOBILE) ---
 window.addEventListener('wheel', (e) => {
     if (e.deltaY < 0) {
         ZOOM = Math.min(MAX_ZOOM, ZOOM + 0.15);
@@ -67,7 +71,7 @@ window.addEventListener('touchmove', (e) => {
     }
 }, { passive: true });
 
-// --- SVG SPRITES ---
+// --- SVG SPRITES (PERSONAGEM) ---
 function getSVGString(viewType, step) {
     const progress = (step / TOTAL_FRAMES) * Math.PI * 2;
     const legShift = Math.sin(progress) * 8;
@@ -167,6 +171,37 @@ function preloadSprites() {
 }
 preloadSprites();
 
+// --- SVG ISOMÉTRICO DO TRAILER DE LANCHE ---
+function getTrailerSVG() {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="300" height="240" viewBox="0 0 300 240">
+        <!-- Sombra Isométrica Base -->
+        <polygon points="150,220 270,160 150,100 30,160" fill="rgba(0,0,0,0.35)" />
+        
+        <!-- Parede Esquerda (Azul Elétrico) -->
+        <polygon points="30,160 150,220 150,110 30,50" fill="#0077b6" stroke="#003554" stroke-width="3" />
+        
+        <!-- Parede Direita (Azul Escuro com Balcão) -->
+        <polygon points="150,220 270,160 270,50 150,110" fill="#023e8a" stroke="#001d3d" stroke-width="3" />
+        
+        <!-- Teto Amarelo de Destaque -->
+        <polygon points="30,50 150,110 270,50 150,0" fill="#ffcc00" stroke="#c79a00" stroke-width="3" />
+        
+        <!-- Balcão de Atendimento Neon -->
+        <polygon points="170,175 250,135 250,105 170,145" fill="#ffdd00" stroke="#101010" stroke-width="2" />
+        <polygon points="160,140 260,90 260,82 160,132" fill="#66fcf1" />
+        
+        <!-- Chaminé / Exaustor Superior -->
+        <polygon points="80,35 100,45 100,20 80,10" fill="#1b2a38" />
+        
+        <!-- Letreiros de Neon em Texto SVG -->
+        <text x="75" y="115" font-family="sans-serif" font-weight="bold" font-size="16" fill="#ffcc00" transform="rotate(26, 75, 115)">ZYRO BURGER</text>
+    </svg>`;
+}
+
+const trailerImg = new Image();
+trailerImg.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(getTrailerSVG());
+
+// --- MATEMÁTICA DE PROJEÇÃO ---
 function worldToScreen(wx, wy) {
     const relX = wx - player.worldX;
     const relY = wy - player.worldY;
@@ -205,69 +240,19 @@ function getSpriteFor16Directions(dirIndex) {
     return { viewType, flipX, rotationAngle };
 }
 
-// --- RENDERIZAÇÃO DE OBJETOS COM COLISÃO ---
-function drawObject(obj) {
-    const pos = worldToScreen(obj.x, obj.y);
-    const tileW = TILE_WIDTH * (ZOOM / 1.8);
-    const tileH = TILE_HEIGHT * (ZOOM / 1.8);
+// --- FUNÇÕES ISOLADAS DE DESENHO (PARA ORDENAÇÃO DE PROFUNDIDADE) ---
+function drawTrailer() {
+    // Ponto base inferior do trailer para alinhamento na grelha
+    const pos = worldToScreen(foodTrailer.x + foodTrailer.w / 2, foodTrailer.y + foodTrailer.h / 2);
+    const drawW = 300 * (ZOOM / 1.8);
+    const drawH = 240 * (ZOOM / 1.8);
 
-    ctx.save();
-    ctx.fillStyle = obj.color;
-    ctx.strokeStyle = '#151d26';
-    ctx.lineWidth = 2;
-
-    // Renderiza caixa isométrica para o objeto
-    const wPx = obj.w * (tileW / 2);
-    const hPx = obj.h * (tileH / 2);
-
-    ctx.beginPath();
-    ctx.moveTo(pos.x, pos.y);
-    ctx.lineTo(pos.x + wPx, pos.y + hPx);
-    ctx.lineTo(pos.x + wPx - hPx, pos.y + hPx + wPx/2);
-    ctx.lineTo(pos.x - hPx, pos.y + wPx/2);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Rótulo
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '12px Segoe UI';
-    ctx.textAlign = 'center';
-    ctx.fillText(obj.label, pos.x, pos.y - 10);
-    ctx.restore();
+    if (trailerImg.complete) {
+        ctx.drawImage(trailerImg, pos.x - (drawW / 2), pos.y - (drawH * 0.75), drawW, drawH);
+    }
 }
 
-// --- RENDER LOOP ---
-function render() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-    const halfGrid = 7;
-    const effectiveTileW = TILE_WIDTH * (ZOOM / 1.8);
-    const effectiveTileH = TILE_HEIGHT * (ZOOM / 1.8);
-
-    // Grid Isométrico
-    for (let x = -halfGrid; x < halfGrid; x++) {
-        for (let y = -halfGrid; y < halfGrid; y++) {
-            const pos = worldToScreen(x, y);
-
-            ctx.beginPath();
-            ctx.moveTo(pos.x, pos.y);
-            ctx.lineTo(pos.x + effectiveTileW / 2, pos.y + effectiveTileH / 2);
-            ctx.lineTo(pos.x, pos.y + effectiveTileH);
-            ctx.lineTo(pos.x - effectiveTileW / 2, pos.y + effectiveTileH / 2);
-            ctx.closePath();
-
-            ctx.fillStyle = (x + y) % 2 === 0 ? "#181e29" : "#222a38";
-            ctx.fill();
-            ctx.strokeStyle = "rgba(102, 252, 241, 0.05)";
-            ctx.stroke();
-        }
-    }
-
-    // Renderiza Objetos de Interesse
-    worldObjects.forEach(drawObject);
-
-    // Animação do Jogador
+function drawPlayer() {
     if (player.isMoving) {
         player.animFrame = (player.animFrame + 0.25) % TOTAL_FRAMES;
     } else {
@@ -292,13 +277,52 @@ function render() {
         ctx.drawImage(imgToDraw, -(drawWidth / 2), -drawHeight + (15 * ZOOM), drawWidth, drawHeight);
     }
     ctx.restore();
+}
 
+// --- RENDER LOOP COM Y-SORTING ---
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    const halfGrid = 7;
+    const effectiveTileW = TILE_WIDTH * (ZOOM / 1.8);
+    const effectiveTileH = TILE_HEIGHT * (ZOOM / 1.8);
+
+    // 1. Grid Isométrico de Fundo
+    for (let x = -halfGrid; x < halfGrid; x++) {
+        for (let y = -halfGrid; y < halfGrid; y++) {
+            const pos = worldToScreen(x, y);
+
+            ctx.beginPath();
+            ctx.moveTo(pos.x, pos.y);
+            ctx.lineTo(pos.x + effectiveTileW / 2, pos.y + effectiveTileH / 2);
+            ctx.lineTo(pos.x, pos.y + effectiveTileH);
+            ctx.lineTo(pos.x - effectiveTileW / 2, pos.y + effectiveTileH / 2);
+            ctx.closePath();
+
+            ctx.fillStyle = (x + y) % 2 === 0 ? "#181e29" : "#222a38";
+            ctx.fill();
+            ctx.strokeStyle = "rgba(102, 252, 241, 0.05)";
+            ctx.stroke();
+        }
+    }
+
+    // 2. Ordenação de Profundidade (Y-Sorting)
+    const renderList = [
+        { y: player.worldY, draw: drawPlayer },
+        { y: foodTrailer.y + foodTrailer.h, draw: drawTrailer }
+    ];
+
+    // Desenha o objeto com menor valor de Y primeiro (fundo), depois os da frente
+    renderList.sort((a, b) => a.y - b.y);
+    renderList.forEach(item => item.draw());
+
+    // Updates da HUD
     document.getElementById('coordsDisplay').innerText = `${player.worldX.toFixed(1)}, ${player.worldY.toFixed(1)} | Zoom: ${ZOOM.toFixed(1)}x`;
 
     requestAnimationFrame(render);
 }
 
-// --- CONTROLES JOYSTICK ---
+// --- CONTROLES DO JOYSTICK ---
 const joyZone = document.getElementById('joystick-zone');
 const joyStick = document.getElementById('joystick-stick');
 let isDragging = false;
@@ -346,17 +370,29 @@ window.addEventListener('pointerup', () => {
     }
 });
 
-// --- ENGINE DE COLISÃO / FÍSICA ---
+// --- INTERAÇÕES DOS BOTÕES ---
+document.getElementById('btnA').addEventListener('pointerdown', () => {
+    const distToTrailer = Math.hypot(player.worldX - foodTrailer.interactX, player.worldY - foodTrailer.interactY);
+    if (distToTrailer < 1.8) {
+        alert("🍔 Pedido coletado no Trailer de Lanche!");
+    } else {
+        console.log("Ação A disparada no vazio");
+    }
+});
+
+document.getElementById('btnB').addEventListener('pointerdown', () => {
+    console.log("Ação B disparada");
+});
+
+// --- ENGINE DE COLISÃO E FÍSICA DE BORDA ---
 function checkCollision(targetX, targetY) {
-    for (const obj of worldObjects) {
-        if (
-            targetX + player.radius > obj.x &&
-            targetX - player.radius < obj.x + obj.w &&
-            targetY + player.radius > obj.y &&
-            targetY - player.radius < obj.y + obj.h
-        ) {
-            return true; // Colidiu
-        }
+    if (
+        targetX + player.radius > foodTrailer.x &&
+        targetX - player.radius < foodTrailer.x + foodTrailer.w &&
+        targetY + player.radius > foodTrailer.y &&
+        targetY - player.radius < foodTrailer.y + foodTrailer.h
+    ) {
+        return true;
     }
     return false;
 }
@@ -369,7 +405,7 @@ setInterval(() => {
         const nextX = player.worldX + isoX * player.speed;
         const nextY = player.worldY + isoY * player.speed;
 
-        // Validação de física por eixo (permite deslizar na parede)
+        // Validação de eixos separados para permitir deslizamento suave em paredes
         if (!checkCollision(nextX, player.worldY)) {
             player.worldX = nextX;
         }
