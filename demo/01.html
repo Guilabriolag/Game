@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>ZYRO Engine - Centro Comercial Alphaville</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; touch-action:none; user-select:none; -webkit-user-select:none; font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif; }
+  body,html { width:100%; height:100%; overflow:hidden; background:#0b0c10; color:#fff; }
+  #gameCanvas { width:100vw; height:100vh; display:block; }
+  #top-bar { position:absolute; top:0; left:0; width:100%; padding:8px 16px; background:rgba(15,15,26,0.95); z-index:10; border-bottom:2px solid #1f2833; font-size:12px; font-weight:bold; color:#66fcf1; display:flex; justify-content:space-between; flex-wrap:wrap; gap:4px 12px; }
+  #hint { position:absolute; top:52px; left:0; width:100%; text-align:center; color:#ffcc00; font-size:13px; font-weight:bold; z-index:10; pointer-events:none; text-shadow:0 1px 3px #000; opacity:0; transition:opacity .2s; }
+  #controls-container { position:absolute; bottom:30px; left:20px; z-index:10; }
+  #joystick-zone { width:150px; height:150px; background:rgba(255,255,255,0.08); border:3px solid rgba(102,252,241,0.4); border-radius:50%; position:relative; backdrop-filter:blur(4px); }
+  #joystick-stick { width:60px; height:60px; background:#66fcf1; border-radius:50%; position:absolute; top:45px; left:45px; box-shadow:0 0 15px rgba(102,252,241,.8); pointer-events:none; }
+  #action-container { position:absolute; bottom:30px; right:20px; z-index:10; display:flex; gap:15px; align-items:flex-end; }
+  .btn-action { width:65px; height:65px; border-radius:50%; border:none; font-size:20px; font-weight:bold; color:#0b0c10; background:#66fcf1; box-shadow:0 0 15px rgba(102,252,241,.5); display:flex; justify-content:center; align-items:center; cursor:pointer; transition:transform .1s,background .1s; }
+  .btn-action:active { transform:scale(0.92); background:#45a29e; }
+  .btn-b { background:#ffcc00; box-shadow:0 0 15px rgba(255,204,0,.5); }
+</style>
+</head>
+<body>
+
+<div id="top-bar">
+  <div>⚡ ZYRO ENGINE | CCA MAP</div>
+  <div>📍 <span id="coordsDisplay">0.0, 0.0</span></div>
+  <div>🧩 Chunk: <span id="chunkDisplay">0,0</span> | Ativos: <span id="chunkCount">0</span></div>
+  <div>🏙️ <span id="sceneDisplay">Centro Comercial</span></div>
+</div>
+<div id="hint">A</div>
+
+<canvas id="gameCanvas"></canvas>
+<div id="controls-container"><div id="joystick-zone"><div id="joystick-stick"></div></div></div>
+<div id="action-container">
+  <button class="btn-action btn-b" id="btnB">B</button>
+  <button class="btn-action" id="btnA">A</button>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+function resizeCanvas(){ canvas.width = innerWidth; canvas.height = innerHeight; }
+addEventListener('resize', resizeCanvas); resizeCanvas();
+
+let ZOOM = 1.4;
+const MIN_ZOOM=0.6, MAX_ZOOM=3.0;
+const TILE_W=120, TILE_H=60;
+const TOTAL_FRAMES=12;
+
+// Inicia o player no centro da alameda principal do Centro Comercial
+const player = { worldX: 0, worldY: 0, radius: 0.4, speed: 0.08, dirIndex: 0, isMoving: false, animFrame: 0 };
+
+// ============ PERSONAGEM 16 DIREÇÕES ============
+const spriteCache = {};
+function getSVGString(viewType, step){
+  const progress = (step/TOTAL_FRAMES)*Math.PI*2;
+  const legShift = Math.sin(progress)*8, armShift = Math.cos(progress)*7;
+  const bodyBob = Math.abs(Math.sin(progress))*3, bodyTilt = Math.sin(progress)*2;
+  let body="";
+  if (viewType==='profile'){
+    body=`<g transform="rotate(${bodyTilt}, 32, 50)">
+      <rect x="${30+legShift}" y="58" width="7" height="26" rx="3" fill="#1b2a38"/>
+      <rect x="${30-legShift}" y="58" width="7" height="26" rx="3" fill="#233548"/>
+      <rect x="${29+legShift}" y="80" width="9" height="7" rx="2" fill="#0d0d0d"/>
+      <rect x="${29-legShift}" y="80" width="9" height="7" rx="2" fill="#0d0d0d"/>
+      <rect x="24" y="30" width="18" height="30" rx="4" fill="#0077b6" stroke="#151d26" stroke-width="2"/>
+      <rect x="18" y="34" width="12" height="18" rx="3" fill="#ffcc00"/>
+      <rect x="${28-armShift}" y="32" width="6" height="22" rx="3" fill="#233548"/>
+      <circle cx="${31-armShift}" cy="56" r="3.5" fill="#e0ac69"/>
+      <circle cx="33" cy="18" r="9" fill="#e0ac69"/>
+      <path d="M 24 10 C 32 10, 38 14, 33 22 C 28 22, 24 18, 24 10 Z" fill="#3a2212"/></g>`;
+  } else if (viewType==='diag_front'){
+    body=`<g transform="rotate(${bodyTilt}, 32, 50)">
+      <rect x="${21-legShift*0.5}" y="${58-legShift*0.7}" width="7" height="26" rx="3" fill="#15212d"/>
+      <rect x="${20-legShift*0.5}" y="${80-legShift*0.7}" width="9" height="7" rx="2" fill="#050505"/>
+      <rect x="${31+legShift*0.5}" y="${58+legShift*0.7}" width="8" height="26" rx="3" fill="#233548"/>
+      <rect x="${30+legShift*0.5}" y="${80+legShift*0.7}" width="10" height="7" rx="2" fill="#0d0d0d"/>
+      <rect x="18" y="30" width="28" height="30" rx="5" fill="#0077b6" stroke="#151d26" stroke-width="2"/>
+      <rect x="14" y="33" width="10" height="20" rx="3" fill="#ffcc00"/>
+      <polygon points="26,30 30,37 35,30" fill="#d9d9d9"/>
+      <rect x="11" y="${32-armShift}" width="6" height="20" rx="3" fill="#1b2a38"/>
+      <rect x="42" y="${32+armShift}" width="7" height="22" rx="3" fill="#2b3a4a"/>
+      <circle cx="45.5" cy="${56+armShift}" r="3.5" fill="#e0ac69"/>
+      <circle cx="32" cy="18" r="9.5" fill="#e0ac69"/>
+      <path d="M 23 15 C 23 7, 40 8, 38 18 C 32 18, 25 18, 23 15 Z" fill="#3a2212"/></g>`;
+  } else if (viewType==='diag_back'){
+    body=`<g transform="rotate(${bodyTilt}, 32, 50)">
+      <rect x="${21-legShift*0.5}" y="${58-legShift*0.7}" width="7" height="26" rx="3" fill="#15212d"/>
+      <rect x="${31+legShift*0.5}" y="${58+legShift*0.7}" width="8" height="26" rx="3" fill="#233548"/>
+      <rect x="18" y="31" width="26" height="27" rx="5" fill="#ffcc00" stroke="#233020" stroke-width="2"/>
+      <rect x="10" y="${32-armShift}" width="6" height="20" rx="3" fill="#1b2a38"/>
+      <rect x="43" y="${32+armShift}" width="7" height="22" rx="3" fill="#2b3a4a"/>
+      <circle cx="32" cy="18" r="9.5" fill="#3a2212"/></g>`;
+  } else if (viewType==='back'){
+    body=`<g transform="rotate(${bodyTilt}, 32, 50)">
+      <rect x="23" y="${58+legShift}" width="8" height="26" rx="3" fill="#1b2a38"/>
+      <rect x="33" y="${58-legShift}" width="8" height="26" rx="3" fill="#233548"/>
+      <rect x="22" y="${80+legShift}" width="10" height="7" rx="2" fill="#0d0d0d"/>
+      <rect x="32" y="${80-legShift}" width="10" height="7" rx="2" fill="#0d0d0d"/>
+      <rect x="18" y="32" width="28" height="26" rx="5" fill="#ffcc00" stroke="#233020" stroke-width="2"/>
+      <rect x="10" y="${32-armShift}" width="7" height="22" rx="3" fill="#233548"/>
+      <rect x="47" y="${32+armShift}" width="7" height="22" rx="3" fill="#2b3a4a"/>
+      <circle cx="32" cy="18" r="10" fill="#3a2212"/></g>`;
+  } else {
+    body=`<g transform="rotate(${bodyTilt}, 32, 50)">
+      <rect x="23" y="${58+legShift}" width="8" height="26" rx="3" fill="#1b2a38"/>
+      <rect x="33" y="${58-legShift}" width="8" height="26" rx="3" fill="#233548"/>
+      <rect x="22" y="${80+legShift}" width="10" height="7" rx="2" fill="#0d0d0d"/>
+      <rect x="32" y="${80-legShift}" width="10" height="7" rx="2" fill="#0d0d0d"/>
+      <rect x="16" y="30" width="32" height="30" rx="5" fill="#0077b6" stroke="#151d26" stroke-width="2"/>
+      <polygon points="28,30 32,38 36,30" fill="#d9d9d9"/>
+      <rect x="10" y="${32-armShift}" width="7" height="22" rx="3" fill="#233548"/>
+      <rect x="47" y="${32+armShift}" width="7" height="22" rx="3" fill="#2b3a4a"/>
+      <circle cx="13.5" cy="${56-armShift}" r="3.5" fill="#e0ac69"/>
+      <circle cx="50.5" cy="${56+armShift}" r="3.5" fill="#e0ac69"/>
+      <rect x="29" y="24" width="6" height="7" fill="#c99352"/>
+      <circle cx="32" cy="18" r="10" fill="#e0ac69"/>
+      <path d="M 22 16 C 22 7, 42 7, 42 16 Z" fill="#3a2212"/></g>`;
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="96" viewBox="0 0 64 96">
+    <ellipse cx="32" cy="86" rx="18" ry="8" fill="rgba(0,0,0,0.4)"/>
+    <g transform="translate(0, ${-bodyBob})">${body}</g></svg>`;
+}
+function preloadSprites(){
+  ['front','back','profile','diag_front','diag_back'].forEach(view=>{
+    spriteCache[view]=[];
+    for(let i=0;i<TOTAL_FRAMES;i++){
+      const img=new Image();
+      img.src='data:image/svg+xml;utf8,'+encodeURIComponent(getSVGString(view,i));
+      spriteCache[view].push(img);
+    }
+  });
+}
+preloadSprites();
+function getSpriteFor16(dirIndex){
+  let viewType='front', flipX=1, rot=0;
+  switch(dirIndex){
+    case 0: viewType='front'; break;
+    case 1: viewType='diag_front'; rot=-11.25; break;
+    case 2: viewType='diag_front'; break;
+    case 3: viewType='profile'; rot=-11.25; break;
+    case 4: viewType='profile'; break;
+    case 5: viewType='diag_back'; rot=11.25; break;
+    case 6: viewType='diag_back'; break;
+    case 7: viewType='back'; rot=-11.25; break;
+    case 8: viewType='back'; break;
+    case 9: viewType='back'; rot=11.25; break;
+    case 10: viewType='diag_back'; flipX=-1; break;
+    case 11: viewType='profile'; flipX=-1; rot=-11.25; break;
+    case 12: viewType='profile'; flipX=-1; break;
+    case 13: viewType='diag_front'; flipX=-1; rot=11.25; break;
+    case 14: viewType='diag_front'; flipX=-1; break;
+    case 15: viewType='front'; rot=11.25; break;
+  }
+  return {viewType, flipX, rot};
+}
+function drawPlayer(){
+  if (player.isMoving) player.animFrame = (player.animFrame+0.25)%TOTAL_FRAMES;
+  else player.animFrame = 0;
+  const frame = Math.floor(player.animFrame);
+  const sd = getSpriteFor16(player.dirIndex);
+  const img = spriteCache[sd.viewType][frame];
+  const c = {x:canvas.width/2, y:canvas.height/2};
+  const dw=64*ZOOM, dh=96*ZOOM;
+  ctx.save();
+  ctx.translate(c.x, c.y);
+  if (sd.flipX===-1) ctx.scale(-1,1);
+  if (sd.rot!==0) ctx.rotate(sd.rot*Math.PI/180);
+  if (img && img.complete) ctx.drawImage(img, -dw/2, -dh+15*ZOOM, dw, dh);
+  ctx.restore();
+}
+
+// ============ MUNDO REAL: MALHA DE MALHAS DO CENTRO COMERCIAL ============
+// Vias externas principais (Avenidas) e alamedas internas em coordenadas de mundo
+const roads = [
+  // Avenidas Perimetrais
+  { x1:-45, y1:-35, x2:45, y2:-35, width:3.5 }, // Av. Madeira (Norte)
+  { x1:45, y1:-35, x2:45, y2:35, width:3.5 },   // Av. Rio Negro (Leste)
+  { x1:-45, y1:35, x2:45, y2:35, width:3.5 },   // Av. Araguaia (Sul)
+  { x1:-45, y1:-35, x2:-45, y2:35, width:3.5 }, // Av. Purus (Oeste)
+
+  // Alamedas Principais Internas (Cruz Central)
+  { x1:-42, y1:0, x2:42, y2:0, width:2.2 },     // Alameda Central Horizontal
+  { x1:0, y1:-32, x2:0, y2:32, width:2.2 },     // Alameda Central Vertical
+
+  // Alamedas Secundárias (Grelha Interna)
+  { x1:-22, y1:-32, x2:-22, y2:32, width:1.5 },
+  { x1:22, y1:-32, x2:22, y2:32, width:1.5 },
+  { x1:-42, y1:-18, x2:42, y2:-18, width:1.5 },
+  { x1:-42, y1:18, x2:42, y2:18, width:1.5 }
+];
+
+function distToSegment(px,py,x1,y1,x2,y2){
+  const dx=x2-x1, dy=y2-y1;
+  const len2 = dx*dx+dy*dy;
+  let t = len2===0 ? 0 : ((px-x1)*dx+(py-y1)*dy)/len2;
+  t = Math.max(0, Math.min(1, t));
+  const cx = x1+t*dx, cy = y1+t*dy;
+  return Math.hypot(px-cx, py-cy);
+}
+function tileType(x,y){
+  for (const r of roads){
+    if (distToSegment(x,y,r.x1,r.y1,r.x2,r.y2) <= r.width/2) return 'rua';
+  }
+  for (const r of roads){
+    if (distToSegment(x,y,r.x1,r.y1,r.x2,r.y2) <= r.width/2 + 0.8) return 'calcada';
+  }
+  return 'grama';
+}
+
+// ============ REPLICANDO QUADRAS E PRÉDIOS DO MAPA (4 SETORES) ============
+function makeBuilding(cfg){ return Object.assign({isOpen:false}, cfg); }
+
+const buildings = [
+  // --- SETOR AZUL (Norte-Oeste) ---
+  makeBuilding({ id:'bloco_azul_1', x:-38, y:-30, w:12, h:10, roofColor:'#0d5cb6', wallColor:'#083c7a', wallColor2:'#052852', doorX:-32, doorY:-19.5, label:'Setor Azul - N1' }),
+  makeBuilding({ id:'bloco_azul_2', x:-18, y:-30, w:14, h:10, roofColor:'#0d5cb6', wallColor:'#083c7a', wallColor2:'#052852', doorX:-11, doorY:-19.5, label:'Setor Azul - N2' }),
+  makeBuilding({ id:'bloco_azul_3', x:-38, y:-14, w:14, h:11, roofColor:'#0d5cb6', wallColor:'#083c7a', wallColor2:'#052852', doorX:-31, doorY:-2.5, label:'Setor Azul - S1' }),
+  makeBuilding({ id:'bloco_azul_4', x:-18, y:-14, w:14, h:11, roofColor:'#0d5cb6', wallColor:'#083c7a', wallColor2:'#052852', doorX:-11, doorY:-2.5, label:'Setor Azul - S2' }),
+
+  // --- SETOR VERDE (Norte-Leste) ---
+  makeBuilding({ id:'bloco_verde_1', x:5, y:-30, w:15, h:10, roofColor:'#109648', wallColor:'#0a6330', wallColor2:'#064220', doorX:12, doorY:-19.5, label:'Setor Verde - N1' }),
+  makeBuilding({ id:'bloco_verde_2', x:24, y:-30, w:15, h:10, roofColor:'#109648', wallColor:'#0a6330', wallColor2:'#064220', doorX:31, doorY:-19.5, label:'Setor Verde - N2' }),
+  makeBuilding({ id:'bloco_verde_3', x:5, y:-14, w:15, h:11, roofColor:'#109648', wallColor:'#0a6330', wallColor2:'#064220', doorX:12, doorY:-2.5, label:'Setor Verde - S1' }),
+  makeBuilding({ id:'bloco_verde_4', x:24, y:-14, w:15, h:11, roofColor:'#109648', wallColor:'#0a6330', wallColor2:'#064220', doorX:31, doorY:-2.5, label:'Setor Verde - S2' }),
+
+  // --- SETOR VERMELHO (Centro / Sul-Oeste) ---
+  makeBuilding({ id:'bloco_vermelho_1', x:-38, y:4, w:14, h:12, roofColor:'#e52427', wallColor:'#a1181a', wallColor2:'#6e1012', doorX:-31, doorY:16.5, label:'Setor Vermelho - O1' }),
+  makeBuilding({ id:'bloco_vermelho_2', x:-18, y:4, w:14, h:12, roofColor:'#e52427', wallColor:'#a1181a', wallColor2:'#6e1012', doorX:-11, doorY:16.5, label:'Setor Vermelho - O2' }),
+  makeBuilding({ id:'bloco_vermelho_3', x:-28, y:19, w:22, h:10, roofColor:'#e52427', wallColor:'#a1181a', wallColor2:'#6e1012', doorX:-17, doorY:29.5, label:'Setor Vermelho - S1' }),
+
+  // --- SETOR AMARELO (Sul-Leste) ---
+  makeBuilding({ id:'bloco_amarelo_1', x:5, y:4, w:15, h:12, roofColor:'#e59b00', wallColor:'#9e6b00', wallColor2:'#694700', doorX:12, doorY:16.5, label:'Setor Amarelo - N1' }),
+  makeBuilding({ id:'bloco_amarelo_2', x:24, y:4, w:15, h:12, roofColor:'#e59b00', wallColor:'#9e6b00', wallColor2:'#694700', doorX:31, doorY:16.5, label:'Setor Amarelo - N2' }),
+  makeBuilding({ id:'bloco_amarelo_3', x:5, y:19, w:15, h:10, roofColor:'#e59b00', wallColor:'#9e6b00', wallColor2:'#694700', doorX:12, doorY:29.5, label:'Setor Amarelo - S1' }),
+  makeBuilding({ id:'bloco_amarelo_4', x:24, y:19, w:15, h:10, roofColor:'#e59b00', wallColor:'#9e6b00', wallColor2:'#694700', doorX:31, doorY:29.5, label:'Setor Amarelo - S2' }),
+];
+
+function buildingSVG(b){
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="360" height="280" viewBox="0 0 360 280">
+    <polygon points="180,250 340,170 180,90 20,170" fill="rgba(0,0,0,.35)"/>
+    <polygon points="20,170 180,250 180,120 20,40" fill="${b.wallColor}" stroke="#00131f" stroke-width="3"/>
+    <polygon points="180,250 340,170 340,40 180,120" fill="${b.wallColor2}" stroke="#00131f" stroke-width="3"/>
+    <polygon points="20,40 180,120 340,40 180,-40" fill="${b.roofColor}" stroke="#111" stroke-width="3"/>
+    <rect x="65" y="95" width="40" height="40" rx="3" fill="#66fcf1" opacity="0.85" transform="skewY(-15)"/>
+    <rect x="245" y="75" width="40" height="40" rx="3" fill="#66fcf1" opacity="0.85" transform="skewY(15)"/>
+    <text x="60" y="160" font-family="sans-serif" font-weight="bold" font-size="16" fill="#fff" transform="rotate(26,60,160)">${b.label.toUpperCase()}</text>
+  </svg>`;
+}
+function doorSVG(color){
+  const img=new Image();
+  img.src='data:image/svg+xml;utf8,'+encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" width="40" height="50" viewBox="0 0 40 50">
+      <rect x="6" y="4" width="28" height="42" rx="3" fill="${color}" stroke="#000" stroke-width="2"/>
+      <circle cx="28" cy="25" r="2.5" fill="#ffdd00"/></svg>`);
+  return img;
+}
+buildings.forEach(b=>{
+  b.img=new Image();
+  b.img.src='data:image/svg+xml;utf8,'+encodeURIComponent(buildingSVG(b));
+  b.doorImgClosed=doorSVG('#222');
+  b.doorImgOpen=doorSVG('#1b7a3d');
+});
+
+// ============ PRAÇA CENTRAL (PRAÇA DAS ORQUÍDEAS) ============
+const plaza = {
+  cx: 0, cy: 0, radius: 4.5,
+  coreto: { x:-1.5, y:-1.5, w:3, h:3 }
+};
+const coretoImg = new Image();
+coretoImg.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(`
+  <svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">
+    <ellipse cx="100" cy="160" rx="80" ry="25" fill="rgba(0,0,0,.35)"/>
+    <polygon points="100,15 180,65 20,65" fill="#0077b6" stroke="#023e8a" stroke-width="3"/>
+    <rect x="35" y="65" width="10" height="80" fill="#e59b00"/>
+    <rect x="155" y="65" width="10" height="80" fill="#e59b00"/>
+    <rect x="95" y="65" width="10" height="80" fill="#e59b00"/>
+    <ellipse cx="100" cy="140" rx="70" ry="20" fill="#ffffff" stroke="#0077b6" stroke-width="3"/>
+    <text x="60" y="145" font-family="sans-serif" font-weight="bold" font-size="12" fill="#0d5cb6">PRAÇA CENTRAL</text>
+  </svg>`);
+
+// ============ CENAS / INTERIOR ============
+let scene='city';
+let savedCityPos={x:player.worldX,y:player.worldY};
+let activeInterior=null;
+const INTERIOR_W=6, INTERIOR_H=5;
+
+function enterBuilding(b){
+  savedCityPos={x:player.worldX,y:player.worldY};
+  activeInterior=b; scene='interior';
+  player.worldX=0; player.worldY=INTERIOR_H/2-0.6;
+  document.getElementById('sceneDisplay').innerText='Galeria: '+b.label;
+}
+function exitBuilding(){
+  scene='city'; player.worldX=savedCityPos.x; player.worldY=savedCityPos.y;
+  document.getElementById('sceneDisplay').innerText='Centro Comercial'; activeInterior=null;
+}
+
+// ============ SISTEMA DE CHUNKS ============
+const CHUNK_SIZE = 16;
+const CHUNK_RADIUS = 2;
+function worldToChunk(x,y){ return { cx: Math.floor(x/CHUNK_SIZE), cy: Math.floor(y/CHUNK_SIZE) }; }
+function getLoadedChunkBounds(){
+  const {cx,cy} = worldToChunk(player.worldX, player.worldY);
+  return {
+    minCX: cx-CHUNK_RADIUS, maxCX: cx+CHUNK_RADIUS,
+    minCY: cy-CHUNK_RADIUS, maxCY: cy+CHUNK_RADIUS,
+    minX: (cx-CHUNK_RADIUS)*CHUNK_SIZE, maxX: (cx+CHUNK_RADIUS+1)*CHUNK_SIZE,
+    minY: (cy-CHUNK_RADIUS)*CHUNK_SIZE, maxY: (cy+CHUNK_RADIUS+1)*CHUNK_SIZE,
+    cx, cy
+  };
+}
+function entityInBounds(ex,ey,b){ return ex>=b.minX-8 && ex<=b.maxX+8 && ey>=b.minY-8 && ey<=b.maxY+8; }
+
+// ============ PROJEÇÃO ============
+function worldToScreen(wx,wy){
+  const relX=wx-player.worldX, relY=wy-player.worldY;
+  const tw=TILE_W*ZOOM/1.6, th=TILE_H*ZOOM/1.6;
+  return { x: canvas.width/2 + (relX-relY)*(tw/2), y: canvas.height/2 + (relX+relY)*(th/2) };
+}
+
+function drawBuilding(b){
+  const pos=worldToScreen(b.x+b.w/2, b.y+b.h/2);
+  const dw=360*ZOOM/1.6, dh=280*ZOOM/1.6;
+  if (b.img.complete) ctx.drawImage(b.img, pos.x-dw/2, pos.y-dh*0.75, dw, dh);
+  const dpos=worldToScreen(b.doorX,b.doorY);
+  const doorImg = b.isOpen ? b.doorImgOpen : b.doorImgClosed;
+  const ddw=26*ZOOM, ddh=32*ZOOM;
+  if (doorImg.complete) ctx.drawImage(doorImg, dpos.x-ddw/2, dpos.y-ddh*0.8, ddw, ddh);
+}
+function drawCoreto(){
+  const c = plaza.coreto;
+  const pos = worldToScreen(c.x+c.w/2, c.y+c.h/2);
+  const dw = 200*ZOOM/1.6, dh=200*ZOOM/1.6;
+  if (coretoImg.complete) ctx.drawImage(coretoImg, pos.x-dw/2, pos.y-dh*0.78, dw, dh);
+}
+
+// ============ RENDER CIDADE ============
+function renderCity(){
+  const bounds = getLoadedChunkBounds();
+  document.getElementById('chunkDisplay').innerText = `${bounds.cx},${bounds.cy}`;
+
+  const tw=TILE_W*ZOOM/1.6, th=TILE_H*ZOOM/1.6;
+  for (let x=Math.floor(bounds.minX); x<bounds.maxX; x++){
+    for (let y=Math.floor(bounds.minY); y<bounds.maxY; y++){
+      const pos=worldToScreen(x,y);
+      if (pos.x < -tw || pos.x > canvas.width+tw || pos.y < -th || pos.y > canvas.height+th) continue;
+      ctx.beginPath();
+      ctx.moveTo(pos.x,pos.y);
+      ctx.lineTo(pos.x+tw/2, pos.y+th/2);
+      ctx.lineTo(pos.x, pos.y+th);
+      ctx.lineTo(pos.x-tw/2, pos.y+th/2);
+      ctx.closePath();
+      
+      const t = tileType(x,y);
+      const inPlaza = Math.hypot(x-plaza.cx, y-plaza.cy) < plaza.radius;
+      
+      ctx.fillStyle = inPlaza ? (((x+y)%2===0) ? '#0077b6' : '#023e8a')
+                     : t==='rua' ? (((x+y)%2===0) ? '#282c34' : '#1e222b')
+                     : t==='calcada' ? (((x+y)%2===0) ? '#4b5563' : '#374151')
+                     : (((x+y)%2===0) ? '#111827' : '#0f172a');
+      ctx.fill();
+      ctx.strokeStyle='rgba(255,255,255,0.03)';
+      ctx.stroke();
+    }
+  }
+  document.getElementById('chunkCount').innerText = ((bounds.maxCX-bounds.minCX+1)*(bounds.maxCY-bounds.minCY+1));
+
+  const list=[{y:player.worldY, draw:drawPlayer}];
+  buildings.forEach(b=>{ if (entityInBounds(b.x+b.w/2, b.y+b.h/2, bounds)) list.push({y:b.y+b.h, draw:()=>drawBuilding(b)}); });
+  if (entityInBounds(plaza.coreto.x, plaza.coreto.y, bounds)) list.push({y:plaza.coreto.y+plaza.coreto.h, draw:drawCoreto});
+  list.sort((a,b)=>a.y-b.y).forEach(i=>i.draw());
+}
+
+function renderInterior(){
+  const tw=TILE_W*ZOOM/1.6, th=TILE_H*ZOOM/1.6;
+  for (let x=0;x<INTERIOR_W;x++){
+    for (let y=0;y<INTERIOR_H;y++){
+      const pos=worldToScreen(x-INTERIOR_W/2+0.5, y-0.5);
+      ctx.beginPath();
+      ctx.moveTo(pos.x,pos.y);
+      ctx.lineTo(pos.x+tw/2,pos.y+th/2);
+      ctx.lineTo(pos.x,pos.y+th);
+      ctx.lineTo(pos.x-tw/2,pos.y+th/2);
+      ctx.closePath();
+      ctx.fillStyle = ((x+y)%2===0) ? '#1f2937' : '#111827';
+      ctx.fill();
+      ctx.strokeStyle='rgba(102,252,241,0.1)';
+      ctx.stroke();
+    }
+  }
+  const exitPos = worldToScreen(0, INTERIOR_H/2-0.5);
+  ctx.beginPath(); ctx.arc(exitPos.x,exitPos.y,10*ZOOM,0,Math.PI*2);
+  ctx.fillStyle='rgba(102,252,241,0.5)'; ctx.fill();
+  drawPlayer();
+}
+
+function updateHint(){
+  const hint=document.getElementById('hint');
+  if (scene==='city'){
+    const near = buildings.find(b=>Math.hypot(player.worldX-b.doorX, player.worldY-b.doorY)<1.8);
+    if (near){ hint.style.opacity=1; hint.innerText = near.isOpen ? `A: Entrar (${near.label})` : `A: Destravar Galeria (${near.label})`; }
+    else hint.style.opacity=0;
+  } else {
+    const distExit=Math.hypot(player.worldX-0, player.worldY-(INTERIOR_H/2-0.5));
+    hint.style.opacity = distExit<1.2 ? 1 : 0;
+    hint.innerText='B: Voltar à Alameda';
+  }
+}
+
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  if (scene==='city') renderCity(); else renderInterior();
+  document.getElementById('coordsDisplay').innerText = `${player.worldX.toFixed(1)}, ${player.worldY.toFixed(1)} | Zoom: ${ZOOM.toFixed(1)}x`;
+  updateHint();
+  requestAnimationFrame(render);
+}
+
+// ============ ZOOM ============
+addEventListener('wheel', e=>{ ZOOM = e.deltaY<0 ? Math.min(MAX_ZOOM,ZOOM+0.15) : Math.max(MIN_ZOOM,ZOOM-0.15); }, {passive:true});
+let touchStartDist=0;
+addEventListener('touchstart', e=>{ if(e.touches.length===2) touchStartDist=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY); }, {passive:true});
+addEventListener('touchmove', e=>{
+  if(e.touches.length===2){
+    const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+    ZOOM=Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, ZOOM+(d-touchStartDist)*0.005));
+    touchStartDist=d;
+  }
+}, {passive:true});
+
+// ============ JOYSTICK ============
+const joyZone=document.getElementById('joystick-zone');
+const joyStick=document.getElementById('joystick-stick');
+let isDragging=false, joyVector={x:0,y:0};
+function handleMove(cx,cy){
+  const rect=joyZone.getBoundingClientRect();
+  const centerX=rect.left+rect.width/2, centerY=rect.top+rect.height/2;
+  let dX=cx-centerX, dY=cy-centerY;
+  const maxR=55;
+  const dist=Math.min(Math.hypot(dX,dY), maxR);
+  const angle=Math.atan2(dY,dX);
+  const mX=Math.cos(angle)*dist, mY=Math.sin(angle)*dist;
+  joyStick.style.transform=`translate(${mX}px,${mY}px)`;
+  if (dist>3){
+    joyVector={x:mX/maxR, y:mY/maxR};
+    player.isMoving=true;
+    const angleStep=(Math.PI*2)/16;
+    let octant=Math.round((angle+Math.PI)/angleStep)%16;
+    const dirMap=[12,11,10,9,8,7,6,5,4,3,2,1,0,15,14,13];
+    player.dirIndex=dirMap[octant];
+  } else { joyVector={x:0,y:0}; player.isMoving=false; }
+}
+joyZone.addEventListener('pointerdown', e=>{ isDragging=true; handleMove(e.clientX,e.clientY); });
+addEventListener('pointermove', e=>{ if(isDragging) handleMove(e.clientX,e.clientY); });
+addEventListener('pointerup', ()=>{ if(isDragging){ isDragging=false; joyStick.style.transform='translate(0,0)'; joyVector={x:0,y:0}; player.isMoving=false; } });
+
+// ============ CONTROLES DE BOTÃO ============
+document.getElementById('btnA').addEventListener('pointerdown', ()=>{
+  if (scene!=='city') return;
+  const near = buildings.find(b=>Math.hypot(player.worldX-b.doorX, player.worldY-b.doorY)<1.8);
+  if (!near) return;
+  if (!near.isOpen) near.isOpen=true; else enterBuilding(near);
+});
+document.getElementById('btnB').addEventListener('pointerdown', ()=>{
+  if (scene!=='interior') return;
+  const distExit=Math.hypot(player.worldX-0, player.worldY-(INTERIOR_H/2-0.5));
+  if (distExit<1.2) exitBuilding();
+});
+
+// ============ COLISÕES ============
+function checkCollisionCity(tx,ty){
+  for (const b of buildings){
+    if (tx+player.radius>b.x && tx-player.radius<b.x+b.w && ty+player.radius>b.y && ty-player.radius<b.y+b.h) return true;
+  }
+  const c = plaza.coreto;
+  if (tx+player.radius>c.x && tx-player.radius<c.x+c.w && ty+player.radius>c.y && ty-player.radius<c.y+c.h) return true;
+  return false;
+}
+function checkCollisionInterior(tx,ty){
+  const minX=-INTERIOR_W/2+player.radius, maxX=INTERIOR_W/2-player.radius;
+  const minY=-0.5+player.radius, maxY=INTERIOR_H-0.5-player.radius;
+  return tx<minX || tx>maxX || ty<minY || ty>maxY;
+}
+setInterval(()=>{
+  if (!player.isMoving) return;
+  const isoX = joyVector.x*Math.cos(Math.PI/4) + joyVector.y*Math.sin(Math.PI/4);
+  const isoY = joyVector.y*Math.cos(Math.PI/4) - joyVector.x*Math.sin(Math.PI/4);
+  const nx=player.worldX+isoX*player.speed, ny=player.worldY+isoY*player.speed;
+  const collide = scene==='city' ? checkCollisionCity : checkCollisionInterior;
+  if (!collide(nx, player.worldY)) player.worldX=nx;
+  if (!collide(player.worldX, ny)) player.worldY=ny;
+}, 1000/60);
+
+render();
+</script>
+</body>
+</html>
