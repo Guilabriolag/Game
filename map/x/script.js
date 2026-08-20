@@ -1,19 +1,29 @@
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
 
-// --- Configurações Gerais ---
-const SCALE = 3.8;             // Aumentado drasticamente para o boneco ficar grande
+// --- Configurações Gerais e Zoom ---
+let ZOOM = 1.8;                // Escala equilibrada por padrão
+const MIN_ZOOM = 1.0;
+const MAX_ZOOM = 3.5;
 const TOTAL_FRAMES = 12;
 const NUM_DIRECTIONS = 16;
 
 const player = {
     worldX: 0,
     worldY: 0,
+    radius: 0.3,              // Raio de colisão do jogador em unidades do mundo
     speed: 0.05,
     dirIndex: 0,
     isMoving: false,
     animFrame: 0
 };
+
+// --- PONTOS DE INTERESSE / OBJETOS COM COLISÃO ---
+const worldObjects = [
+    { id: 'balcao', x: 2, y: 2, w: 2, h: 1, color: '#8b5a2b', label: 'Balcão' },
+    { id: 'porta', x: -3, y: 4, w: 1, h: 0.2, color: '#4a3525', label: 'Porta' },
+    { id: 'janela', x: 4, y: -3, w: 0.2, h: 1.5, color: '#66fcf1', label: 'Janela' }
+];
 
 const spriteCache = {};
 const TILE_WIDTH = 120;
@@ -26,7 +36,38 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// --- SVG Sprites ---
+// --- SUPORTE A ZOOM (MOUSE SCROLL E PINÇA MOBILE) ---
+window.addEventListener('wheel', (e) => {
+    if (e.deltaY < 0) {
+        ZOOM = Math.min(MAX_ZOOM, ZOOM + 0.15);
+    } else {
+        ZOOM = Math.max(MIN_ZOOM, ZOOM - 0.15);
+    }
+}, { passive: true });
+
+let touchStartDist = 0;
+window.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 2) {
+        touchStartDist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+    }
+}, { passive: true });
+
+window.addEventListener('touchmove', (e) => {
+    if (e.touches.length === 2) {
+        const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
+        const delta = (dist - touchStartDist) * 0.005;
+        ZOOM = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, ZOOM + delta));
+        touchStartDist = dist;
+    }
+}, { passive: true });
+
+// --- SVG SPRITES ---
 function getSVGString(viewType, step) {
     const progress = (step / TOTAL_FRAMES) * Math.PI * 2;
     const legShift = Math.sin(progress) * 8;
@@ -49,8 +90,7 @@ function getSVGString(viewType, step) {
                 <circle cx="${31 - armShift}" cy="56" r="3.5" fill="#e0ac69" />
                 <circle cx="33" cy="18" r="9" fill="#e0ac69" />
                 <path d="M 24 10 C 32 10, 38 14, 33 22 C 28 22, 24 18, 24 10 Z" fill="#3a2212" />
-            </g>
-        `;
+            </g>`;
     } else if (viewType === 'diag_front') {
         body = `
             <g transform="rotate(${bodyTilt}, 32, 50)">
@@ -66,8 +106,7 @@ function getSVGString(viewType, step) {
                 <circle cx="45.5" cy="${56 + armShift}" r="3.5" fill="#e0ac69" />
                 <circle cx="32" cy="18" r="9.5" fill="#e0ac69" />
                 <path d="M 23 15 C 23 7, 40 8, 38 18 C 32 18, 25 18, 23 15 Z" fill="#3a2212" />
-            </g>
-        `;
+            </g>`;
     } else if (viewType === 'diag_back') {
         body = `
             <g transform="rotate(${bodyTilt}, 32, 50)">
@@ -77,8 +116,7 @@ function getSVGString(viewType, step) {
                 <rect x="10" y="${32 - armShift}" width="6" height="20" rx="3" fill="#1b2a38" />
                 <rect x="43" y="${32 + armShift}" width="7" height="22" rx="3" fill="#2b3a4a" />
                 <circle cx="32" cy="18" r="9.5" fill="#3a2212" />
-            </g>
-        `;
+            </g>`;
     } else if (viewType === 'back') {
         body = `
             <g transform="rotate(${bodyTilt}, 32, 50)">
@@ -90,8 +128,7 @@ function getSVGString(viewType, step) {
                 <rect x="10" y="${32 - armShift}" width="7" height="22" rx="3" fill="#233548" />
                 <rect x="47" y="${32 + armShift}" width="7" height="22" rx="3" fill="#2b3a4a" />
                 <circle cx="32" cy="18" r="10" fill="#3a2212" />
-            </g>
-        `;
+            </g>`;
     } else {
         body = `
             <g transform="rotate(${bodyTilt}, 32, 50)">
@@ -108,8 +145,7 @@ function getSVGString(viewType, step) {
                 <rect x="29" y="24" width="6" height="7" fill="#c99352" />
                 <circle cx="32" cy="18" r="10" fill="#e0ac69" />
                 <path d="M 22 16 C 22 7, 42 7, 42 16 Z" fill="#3a2212" />
-            </g>
-        `;
+            </g>`;
     }
 
     return `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="96" viewBox="0 0 64 96">
@@ -134,8 +170,11 @@ preloadSprites();
 function worldToScreen(wx, wy) {
     const relX = wx - player.worldX;
     const relY = wy - player.worldY;
-    const screenX = (canvas.width / 2) + (relX - relY) * (TILE_WIDTH / 2);
-    const screenY = (canvas.height / 2) + (relX + relY) * (TILE_HEIGHT / 2);
+    const effectiveTileW = TILE_WIDTH * (ZOOM / 1.8);
+    const effectiveTileH = TILE_HEIGHT * (ZOOM / 1.8);
+
+    const screenX = (canvas.width / 2) + (relX - relY) * (effectiveTileW / 2);
+    const screenY = (canvas.height / 2) + (relX + relY) * (effectiveTileH / 2);
     return { x: screenX, y: screenY };
 }
 
@@ -166,20 +205,56 @@ function getSpriteFor16Directions(dirIndex) {
     return { viewType, flipX, rotationAngle };
 }
 
+// --- RENDERIZAÇÃO DE OBJETOS COM COLISÃO ---
+function drawObject(obj) {
+    const pos = worldToScreen(obj.x, obj.y);
+    const tileW = TILE_WIDTH * (ZOOM / 1.8);
+    const tileH = TILE_HEIGHT * (ZOOM / 1.8);
+
+    ctx.save();
+    ctx.fillStyle = obj.color;
+    ctx.strokeStyle = '#151d26';
+    ctx.lineWidth = 2;
+
+    // Renderiza caixa isométrica para o objeto
+    const wPx = obj.w * (tileW / 2);
+    const hPx = obj.h * (tileH / 2);
+
+    ctx.beginPath();
+    ctx.moveTo(pos.x, pos.y);
+    ctx.lineTo(pos.x + wPx, pos.y + hPx);
+    ctx.lineTo(pos.x + wPx - hPx, pos.y + hPx + wPx/2);
+    ctx.lineTo(pos.x - hPx, pos.y + wPx/2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Rótulo
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '12px Segoe UI';
+    ctx.textAlign = 'center';
+    ctx.fillText(obj.label, pos.x, pos.y - 10);
+    ctx.restore();
+}
+
+// --- RENDER LOOP ---
 function render() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Chão Isométrico
     const halfGrid = 7;
+    const effectiveTileW = TILE_WIDTH * (ZOOM / 1.8);
+    const effectiveTileH = TILE_HEIGHT * (ZOOM / 1.8);
+
+    // Grid Isométrico
     for (let x = -halfGrid; x < halfGrid; x++) {
         for (let y = -halfGrid; y < halfGrid; y++) {
             const pos = worldToScreen(x, y);
 
             ctx.beginPath();
             ctx.moveTo(pos.x, pos.y);
-            ctx.lineTo(pos.x + TILE_WIDTH / 2, pos.y + TILE_HEIGHT / 2);
-            ctx.lineTo(pos.x, pos.y + TILE_HEIGHT);
-            ctx.lineTo(pos.x - TILE_WIDTH / 2, pos.y + TILE_HEIGHT / 2);
+            ctx.lineTo(pos.x + effectiveTileW / 2, pos.y + effectiveTileH / 2);
+            ctx.lineTo(pos.x, pos.y + effectiveTileH);
+            ctx.lineTo(pos.x - effectiveTileW / 2, pos.y + effectiveTileH / 2);
             ctx.closePath();
 
             ctx.fillStyle = (x + y) % 2 === 0 ? "#181e29" : "#222a38";
@@ -189,6 +264,10 @@ function render() {
         }
     }
 
+    // Renderiza Objetos de Interesse
+    worldObjects.forEach(drawObject);
+
+    // Animação do Jogador
     if (player.isMoving) {
         player.animFrame = (player.animFrame + 0.25) % TOTAL_FRAMES;
     } else {
@@ -200,8 +279,8 @@ function render() {
     const imgToDraw = spriteCache[spriteData.viewType][currentFrame];
 
     const screenCenter = { x: canvas.width / 2, y: canvas.height / 2 };
-    const drawWidth = 64 * SCALE;
-    const drawHeight = 96 * SCALE;
+    const drawWidth = 64 * ZOOM;
+    const drawHeight = 96 * ZOOM;
 
     ctx.save();
     ctx.translate(screenCenter.x, screenCenter.y);
@@ -210,16 +289,16 @@ function render() {
     if (spriteData.rotationAngle !== 0) ctx.rotate((spriteData.rotationAngle * Math.PI) / 180);
 
     if (imgToDraw && imgToDraw.complete) {
-        ctx.drawImage(imgToDraw, -(drawWidth / 2), -drawHeight + (15 * SCALE), drawWidth, drawHeight);
+        ctx.drawImage(imgToDraw, -(drawWidth / 2), -drawHeight + (15 * ZOOM), drawWidth, drawHeight);
     }
     ctx.restore();
 
-    document.getElementById('coordsDisplay').innerText = `${player.worldX.toFixed(1)}, ${player.worldY.toFixed(1)}`;
+    document.getElementById('coordsDisplay').innerText = `${player.worldX.toFixed(1)}, ${player.worldY.toFixed(1)} | Zoom: ${ZOOM.toFixed(1)}x`;
 
     requestAnimationFrame(render);
 }
 
-// --- Joystick ---
+// --- CONTROLES JOYSTICK ---
 const joyZone = document.getElementById('joystick-zone');
 const joyStick = document.getElementById('joystick-stick');
 let isDragging = false;
@@ -232,7 +311,7 @@ function handleMove(clientX, clientY) {
 
     let deltaX = clientX - centerX;
     let deltaY = clientY - centerY;
-    const maxRadius = 55; // Ajustado para o novo tamanho de 180px
+    const maxRadius = 55;
     const distance = Math.min(Math.hypot(deltaX, deltaY), maxRadius);
     const angle = Math.atan2(deltaY, deltaX);
 
@@ -267,24 +346,36 @@ window.addEventListener('pointerup', () => {
     }
 });
 
-// --- Eventos dos Botões de Ação ---
-document.getElementById('btnA').addEventListener('pointerdown', () => {
-    console.log("Ação A executada");
-    // Futuro: Correr / Ação
-});
-
-document.getElementById('btnB').addEventListener('pointerdown', () => {
-    console.log("Ação B executada");
-    // Futuro: Atacar / Interagir
-});
+// --- ENGINE DE COLISÃO / FÍSICA ---
+function checkCollision(targetX, targetY) {
+    for (const obj of worldObjects) {
+        if (
+            targetX + player.radius > obj.x &&
+            targetX - player.radius < obj.x + obj.w &&
+            targetY + player.radius > obj.y &&
+            targetY - player.radius < obj.y + obj.h
+        ) {
+            return true; // Colidiu
+        }
+    }
+    return false;
+}
 
 setInterval(() => {
     if (player.isMoving) {
         const isoX = joyVector.x * Math.cos(Math.PI / 4) + joyVector.y * Math.sin(Math.PI / 4);
         const isoY = joyVector.y * Math.cos(Math.PI / 4) - joyVector.x * Math.sin(Math.PI / 4);
 
-        player.worldX += isoX * player.speed;
-        player.worldY += isoY * player.speed;
+        const nextX = player.worldX + isoX * player.speed;
+        const nextY = player.worldY + isoY * player.speed;
+
+        // Validação de física por eixo (permite deslizar na parede)
+        if (!checkCollision(nextX, player.worldY)) {
+            player.worldX = nextX;
+        }
+        if (!checkCollision(player.worldX, nextY)) {
+            player.worldY = nextY;
+        }
     }
 }, 1000 / 60);
 
