@@ -2,22 +2,30 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <title>ZYRO Engine - Módulo Principal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZYRO Engine</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <div id="top-bar">
-        <div>⚡ MÓDULO: 16 DIREÇÕES</div>
+        <div>⚡ ZYRO ENGINE (16-DIR)</div>
         <div>📍 POS: <span id="coordsDisplay">0, 0</span></div>
     </div>
 
     <canvas id="gameCanvas"></canvas>
 
+    <!-- ZONA DE CONTROLES (JOYSTICK) -->
     <div id="controls-container">
         <div id="joystick-zone">
             <div id="joystick-stick"></div>
         </div>
+    </div>
+
+    <!-- ZONA DE BOTÕES DE AÇÃO (DIREITA) -->
+    <div id="action-container">
+        <button class="btn-action btn-a" id="btnA">A</button>
+        <button class="btn-action btn-b" id="btnB">B</button>
     </div>
 
     <script src="script.js"></script>
