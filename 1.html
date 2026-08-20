@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ZYRO - Isometric Character Test</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            user-select: none;
+            -webkit-user-select: none;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body, html {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #0b0c10;
+            color: #fff;
+        }
+
+        #gameCanvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        /* Top Bar Info */
+        #top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 40px;
+            background: rgba(15, 15, 26, 0.85);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 15px;
+            z-index: 10;
+            border-bottom: 2px solid #1f2833;
+            font-size: 12px;
+            color: #66fcf1;
+        }
+
+        /* Joystick Virtual */
+        #controls-container {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            z-index: 10;
+            touch-action: none;
+        }
+
+        #joystick-zone {
+            width: 100px;
+            height: 100px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 2px solid rgba(102, 252, 241, 0.3);
+            border-radius: 50%;
+            position: relative;
+        }
+
+        #joystick-stick {
+            width: 40px;
+            height: 40px;
+            background: #66fcf1;
+            border-radius: 50%;
+            position: absolute;
+            top: 28px;
+            left: 28px;
+            box-shadow: 0 0 10px rgba(102, 252, 241, 0.6);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="top-bar">
+        <div>⚡ TESTE DE PERSONAGEM (STYLE ZOMBOID)</div>
+        <div>📍 POS: <span id="coordsDisplay">0, 0</span></div>
+    </div>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="controls-container">
+        <div id="joystick-zone">
+            <div id="joystick-stick"></div>
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Configuração de Grid Isométrico
+        const GRID_SIZE = 12; // Mapa 12x12 de teste
+        const TILE_WIDTH = 64;
+        const TILE_HEIGHT = 32;
+
+        // Estado do Jogador
+        const player = {
+            worldX: 0,
+            worldY: 0,
+            speed: 0.06,
+            angle: 0, // Direção do olhar
+            isMoving: false,
+            animFrame: 0
+        };
+
+        // Projeção World 2D para Isométrico Screen
+        function worldToScreen(wx, wy) {
+            const relX = wx - player.worldX;
+            const relY = wy - player.worldY;
+
+            const screenX = (canvas.width / 2) + (relX - relY) * (TILE_WIDTH / 2);
+            const screenY = (canvas.height / 2) + (relX + relY) * (TILE_HEIGHT / 2);
+            return { x: screenX, y: screenY };
+        }
+
+        // Gera o SVG do Personagem Estilo Zomboid (Visão Top-Down Isométrica)
+        function createZomboidCharacterSVG(angle, isMoving, animFrame) {
+            const bobbing = isMoving ? Math.sin(animFrame * 0.3) * 2 : 0;
+            const legOffset = isMoving ? Math.sin(animFrame * 0.3) * 6 : 0;
+
+            const svgString = `
+            <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+                <g transform="translate(32, 32) rotate(${angle * 180 / Math.PI}) translate(-32, -32)">
+                    <!-- Sombra -->
+                    <ellipse cx="32" cy="38" rx="14" ry="8" fill="rgba(0,0,0,0.35)" />
+                    
+                    <!-- Perfil/Corpo Estilo Zomboid Top-Down -->
+                    <!-- Pernas/Passos -->
+                    <rect x="${24 + legOffset}" y="36" width="6" height="10" rx="3" fill="#1f2833" />
+                    <rect x="${34 - legOffset}" y="36" width="6" height="10" rx="3" fill="#1f2833" />
+
+                    <!-- Tronco/Jaqueta -->
+                    <path d="M 20 20 L 44 20 L 40 36 L 24 36 Z" fill="#2b3a4a" stroke="#1b2530" stroke-width="2" />
+                    
+                    <!-- Braços/Ombros Largos -->
+                    <circle cx="18" cy="${24 + bobbing}" r="5" fill="#2b3a4a" />
+                    <circle cx="46" cy="${24 - bobbing}" r="5" fill="#2b3a4a" />
+                    
+                    <!-- Mãos (Postura Levemente Pronta) -->
+                    <circle cx="16" cy="${16 + bobbing}" r="3" fill="#e0ac69" />
+                    <circle cx="48" cy="${16 - bobbing}" r="3" fill="#e0ac69" />
+
+                    <!-- Cabeça/Cabelo (Visão Isométrica Superior) -->
+                    <circle cx="32" cy="22" r="8" fill="#e0ac69" /> <!-- Pele -->
+                    <path d="M 24 20 C 24 12, 40 12, 40 20 C 40 16, 24 16, 24 20 Z" fill="#4a2e18" /> <!-- Cabelo -->
+                </g>
+            </svg>`;
+
+            const img = new Image();
+            img.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(svgString);
+            return img;
+        }
+
+        // Cache simples do Frame
+        let currentCharacterImg = null;
+
+        // Render Loop
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Desenhar Grid Isométrico Limitado (Mapa Compacto)
+            const halfGrid = GRID_SIZE / 2;
+            for (let x = -halfGrid; x < halfGrid; x++) {
+                for (let y = -halfGrid; y < halfGrid; y++) {
+                    const pos = worldToScreen(x, y);
+
+                    // Tile Isometric Diamond
+                    ctx.beginPath();
+                    ctx.moveTo(pos.x, pos.y);
+                    ctx.lineTo(pos.x + TILE_WIDTH / 2, pos.y + TILE_HEIGHT / 2);
+                    ctx.lineTo(pos.x, pos.y + TILE_HEIGHT);
+                    ctx.lineTo(pos.x - TILE_WIDTH / 2, pos.y + TILE_HEIGHT / 2);
+                    ctx.closePath();
+
+                    // Estilo Grid
+                    ctx.fillStyle = (x + y) % 2 === 0 ? "#151922" : "#1f2430";
+                    ctx.fill();
+                    ctx.strokeStyle = "rgba(102, 252, 241, 0.08)";
+                    ctx.stroke();
+                }
+            }
+
+            // Atualiza Animação
+            if (player.isMoving) {
+                player.animFrame += 1;
+            }
+            currentCharacterImg = createZomboidCharacterSVG(player.angle, player.isMoving, player.animFrame);
+
+            // Renderizar Personagem no Centro
+            const screenCenter = { x: canvas.width / 2, y: canvas.height / 2 };
+            if (currentCharacterImg.complete) {
+                ctx.drawImage(currentCharacterImg, screenCenter.x - 32, screenCenter.y - 42, 64, 64);
+            }
+
+            // Atualizar UI Coordenadas
+            document.getElementById('coordsDisplay').innerText = `${player.worldX.toFixed(1)}, ${player.worldY.toFixed(1)}`;
+
+            requestAnimationFrame(render);
+        }
+
+        // Lógica de Joystick e Movimentação
+        const joyZone = document.getElementById('joystick-zone');
+        const joyStick = document.getElementById('joystick-stick');
+        let isDragging = false;
+        let joyVector = { x: 0, y: 0 };
+
+        function handleMove(clientX, clientY) {
+            const rect = joyZone.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+
+            let deltaX = clientX - centerX;
+            let deltaY = clientY - centerY;
+            const distance = Math.min(Math.hypot(deltaX, deltaY), 30);
+            const angle = Math.atan2(deltaY, deltaX);
+
+            const moveX = Math.cos(angle) * distance;
+            const moveY = Math.sin(angle) * distance;
+
+            joyStick.style.transform = `translate(${moveX}px, ${moveY}px)`;
+
+            if (distance > 2) {
+                joyVector.x = moveX / 30;
+                joyVector.y = moveY / 30;
+                player.isMoving = true;
+                // Ajusta o ângulo do olhar (orientado pela rotação do joystick)
+                player.angle = angle + Math.PI / 2;
+            } else {
+                joyVector = { x: 0, y: 0 };
+                player.isMoving = false;
+            }
+        }
+
+        joyZone.addEventListener('pointerdown', (e) => {
+            isDragging = true;
+            handleMove(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('pointermove', (e) => {
+            if (isDragging) handleMove(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('pointerup', () => {
+            if (isDragging) {
+                isDragging = false;
+                joyStick.style.transform = `translate(0px, 0px)`;
+                joyVector = { x: 0, y: 0 };
+                player.isMoving = false;
+            }
+        });
+
+        // Loop Físico / Posição
+        setInterval(() => {
+            if (player.isMoving) {
+                // Conversão do joystick relativo para a projeção isométrica
+                player.worldX += (joyVector.x + joyVector.y) * player.speed;
+                player.worldY += (joyVector.y - joyVector.x) * player.speed;
+            }
+        }, 1000 / 60);
+
+        render();
+    </script>
+</body>
+</html>
